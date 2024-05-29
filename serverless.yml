@@ -1,0 +1,78 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: sulcer
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: faas
+service: bike-management-system
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  region: us-east-1
+  environment:
+    BIKES_TABLE: ${self:service}-bikes
+
+plugins:
+  - serverless-offline
+  - serverless-localstack
+
+custom:
+  localstack:
+    stages:
+      - local
+
+functions:
+  createBike:
+    handler: handler.createBike
+    events:
+      - http:
+          path: /bikes
+          method: post
+          cors: true
+
+  getBikes:
+    handler: handler.getBikes
+    events:
+      - http:
+          path: /bikes
+          method: get
+          cors: true
+
+  getBikeById:
+    handler: handler.getBikeById
+    events:
+      - http:
+          path: /bikes/{id}
+          method: get
+          cors: true
+
+  updateBike:
+    handler: handler.updateBike
+    events:
+      - http:
+          path: /bikes/{id}
+          method: put
+          cors: true
+
+  deleteBike:
+    handler: handler.deleteBike
+    events:
+      - http:
+          path: /bike/{id}
+          method: delete
+          cors: true
+
+resources:
+  Resources:
+    EventsDynanoDBTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: ${self:provider.environment.BIKES_TABLE}
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 1
