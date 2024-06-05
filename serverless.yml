@@ -10,6 +10,7 @@ provider:
   region: us-east-1
   environment:
     BIKES_TABLE: ${self:service}-bikes
+    JWT_SECRET: secret
 
 plugins:
   - serverless-offline
@@ -21,6 +22,14 @@ custom:
       - local
 
 functions:
+  login:
+    handler: handler.login
+    events:
+      - http:
+          path: /login
+          method: post
+          cors: true
+
   createBike:
     handler: handler.createBike
     events:
@@ -61,6 +70,33 @@ functions:
           method: delete
           cors: true
 
+  scheduledTask:
+    handler: handler.scheduledTask
+    events:
+      - schedule:
+          rate: rate(5 minutes)
+
+
+  processCarChanges:
+    handler: handler.processBikeChanges
+    events:
+      - stream:
+          type: dynamodb
+          arn:
+            Fn::GetAtt:
+              - BikesTable
+              - StreamArn
+
+  handleSnsNotification:
+    handler: handler.handleSnsNotification
+    events:
+      - sns: bikeNotification
+
+  sendCarsSummary:
+    handler: handler.sendBikesSummary
+    events:
+      - schedule: rate(1 day)
+
 resources:
   Resources:
     EventsDynanoDBTable:
@@ -76,3 +112,10 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 1
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE
+
+    EventNotificationTopic:
+      Type: AWS::SNS::Topic
+      Properties:
+        TopicName: bikeNotification

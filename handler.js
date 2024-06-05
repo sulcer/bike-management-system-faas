@@ -2,6 +2,7 @@
 
 const AWS = require('aws-sdk');
 const uuid = require('uuid');
+const jwt = require('jsonwebtoken');
 
 const docClient = new AWS.DynamoDB.DocumentClient({
     endpoint: 'http://localhost:4566', // Localstack DynamoDB endpoint
@@ -9,6 +10,39 @@ const docClient = new AWS.DynamoDB.DocumentClient({
 });
 
 const TABLE_NAME = "bike-management-system-bikes";
+
+const JWT_SECRET = "secret";
+
+// Middleware to validate JWT
+const authenticateJWT = (event) => {
+    const token = event.headers.Authorization || event.headers.authorization;
+    if (!token) {
+        throw new Error('No token provided');
+    }
+    try {
+        return jwt.verify(token, JWT_SECRET);
+    } catch (error) {
+        throw new Error('Unauthorized');
+    }
+};
+
+// Login
+module.exports.login = async (event) => {
+    const {username, password} = JSON.parse(event.body);
+    if (username === 'admin' && password === 'admin') {
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                token: jwt.sign({username}, JWT_SECRET)
+            })
+        };
+    }
+
+    return {
+        statusCode: 401,
+        body: JSON.stringify({error: 'Unauthorized'})
+    };
+};
 
 module.exports.createBike = async (event) => {
     const {location, available, stars} = JSON.parse(event.body);
@@ -18,6 +52,10 @@ module.exports.createBike = async (event) => {
         TableName: TABLE_NAME,
         Item: newBike
     }).promise();
+
+    // Auto-invoking function
+    await module.exports.sendBikesSummary(event);
+
     return {
         statusCode: 201,
         body: JSON.stringify(newBike)
@@ -82,5 +120,38 @@ module.exports.deleteBike = async (event) => {
     return {
         statusCode: 200,
         body: JSON.stringify({message: 'Bike deleted successfully'})
+    };
+};
+
+module.exports.scheduledTask = async () => {
+    console.log('Scheduled task running...');
+};
+
+module.exports.processBikeChanges = async (event) => {
+    for (const record of event.Records) {
+        console.log('DynamoDB Record: %j', record.dynamodb);
+    }
+};
+
+module.exports.sendBikesSummary = async (event) => {
+    // get all cars
+    const data = await docClient.scan({TableName: TABLE_NAME}).promise();
+    const bikes = data.Items;
+
+    return {
+        statusCode: 200,
+        body: JSON.stringify({bikes: bikes})
+    };
+};
+
+// Handle SNS Notification
+module.exports.handleSnsNotification = async (event) => {
+    for (const record of event.Records) {
+        const snsMessage = record.Sns.Message;
+        console.log('SNS Message:', snsMessage);
+    }
+    return {
+        statusCode: 200,
+        body: JSON.stringify({message: 'SNS notification processed successfully'})
     };
 };
